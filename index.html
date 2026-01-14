@@ -27,43 +27,41 @@
         <a id="icsLink" class="btn default" href="#">Add to Default Calendar</a>
     </div>
 
-    <script>
-        const p = new URLSearchParams(window.location.search);
-        const title = p.get('t') || "New Event";
-        const start = p.get('s') || "20260203T170000"; // YYYYMMDDTHHMMSS
-        const end = p.get('e') || "20260203T183000";   // End Time
-        const loc = p.get('l') || "Location TBD";
+   <script>
+    const p = new URLSearchParams(window.location.search);
+    const title = p.get('t') || "New Event";
+    const startRaw = p.get('s') || "20260203T160000"; 
+    const endRaw = p.get('e') || "20260203T170000";
+    const loc = p.get('l') || "Location TBD";
 
-        // Logic to show Day of Week (e.g., Tuesday)
-        const year = start.substring(0,4);
-        const month = start.substring(4,6) - 1;
-        const day = start.substring(6,8);
-        const dateObj = new Date(year, month, day);
-        const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    // Format for Display on the landing page
+    const year = startRaw.substring(0,4);
+    const month = startRaw.substring(4,6) - 1;
+    const day = startRaw.substring(6,8);
+    const dateObj = new Date(year, month, day);
+    const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
-        // Logic to show Time Range (e.g., 5:00 PM - 6:30 PM)
-        function formatTime(ts) {
-            let h = parseInt(ts.substring(9,11));
-            let m = ts.substring(11,13);
-            let amp = h >= 12 ? 'PM' : 'AM';
-            h = h % 12 || 12;
-            return `${h}:${m} ${amp}`;
-        }
+    // Helper to format ISO for Outlook (YYYY-MM-DDTHH:MM:SS)
+    function toISO(raw) {
+        return `${raw.substring(0,4)}-${raw.substring(4,6)}-${raw.substring(6,8)}T${raw.substring(9,11)}:${raw.substring(11,13)}:${raw.substring(13,15)}`;
+    }
 
-        document.getElementById('title').innerText = title;
-        document.getElementById('dateRow').innerText = dayName;
-        document.getElementById('timeRow').innerText = `${formatTime(start)} - ${formatTime(end)}`;
-        document.getElementById('locRow').innerText = "📍 " + loc;
+    const startISO = toISO(startRaw);
+    const endISO = toISO(endRaw);
 
-        // 1. Outlook
-        document.getElementById('outLink').href = `https://outlook.office.com/calendar/0/deeplink/compose?subject=${encodeURIComponent(title)}&startdt=${start}&enddt=${end}&location=${encodeURIComponent(loc)}`;
-        
-        // 2. Google
-        document.getElementById('gooLink').href = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${start}/${end}&location=${encodeURIComponent(loc)}`;
+    document.getElementById('title').innerText = title;
+    document.getElementById('dateRow').innerText = dayName;
+    document.getElementById('locRow').innerText = "📍 " + loc;
 
-        // 3. Default Calendar
-        const icsData = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:${title}\nDTSTART:${start}\nDTEND:${end}\nLOCATION:${loc}\nEND:VEVENT\nEND:VCALENDAR`;
-        document.getElementById('icsLink').href = "data:text/calendar;charset=utf8," + encodeURIComponent(icsData);
-    </script>
+    // 1. Outlook Link (Now using ISO format with dashes and colons)
+    document.getElementById('outLink').href = `https://outlook.office.com/calendar/0/deeplink/compose?subject=${encodeURIComponent(title)}&startdt=${startISO}&enddt=${endISO}&location=${encodeURIComponent(loc)}`;
+    
+    // 2. Google Link
+    document.getElementById('gooLink').href = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${startRaw}/${endRaw}&location=${encodeURIComponent(loc)}`;
+
+    // 3. Default Calendar
+    const icsData = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:${title}\nDTSTART:${startRaw}\nDTEND:${endRaw}\nLOCATION:${loc}\nEND:VEVENT\nEND:VCALENDAR`;
+    document.getElementById('icsLink').href = "data:text/calendar;charset=utf8," + encodeURIComponent(icsData);
+</script>
 </body>
 </html>
