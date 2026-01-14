@@ -34,33 +34,35 @@
     const endRaw = p.get('e') || "20260203T170000";
     const loc = p.get('l') || "Location TBD";
 
-    // Format for Display on the landing page
+    // Date Logic for Display
     const year = startRaw.substring(0,4);
     const month = startRaw.substring(4,6) - 1;
     const day = startRaw.substring(6,8);
     const dateObj = new Date(year, month, day);
     const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
-    // Helper to format ISO for Outlook (YYYY-MM-DDTHH:MM:SS)
-    function toISO(raw) {
-        return `${raw.substring(0,4)}-${raw.substring(4,6)}-${raw.substring(6,8)}T${raw.substring(9,11)}:${raw.substring(11,13)}:${raw.substring(13,15)}`;
-    }
-
-    const startISO = toISO(startRaw);
-    const endISO = toISO(endRaw);
-
+    // Displaying on the card
     document.getElementById('title').innerText = title;
     document.getElementById('dateRow').innerText = dayName;
     document.getElementById('locRow').innerText = "📍 " + loc;
 
-    // 1. Outlook Link (Now using ISO format with dashes and colons)
-    document.getElementById('outLink').href = `https://outlook.office.com/calendar/0/deeplink/compose?subject=${encodeURIComponent(title)}&startdt=${startISO}&enddt=${endISO}&location=${encodeURIComponent(loc)}`;
-    
-    // 2. Google Link
-    document.getElementById('gooLink').href = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${startRaw}/${endRaw}&location=${encodeURIComponent(loc)}`;
+    // Helper to format for Outlook (YYYY-MM-DDTHH:MM:SS)
+    // We remove any 'Z' to force Outlook to use the user's LOCAL time
+    function toOutlookFormat(raw) {
+        return raw.substring(0,4) + "-" + raw.substring(4,6) + "-" + raw.substring(6,8) + "T" + raw.substring(9,11) + ":" + raw.substring(11,13) + ":00";
+    }
 
-    // 3. Default Calendar
-    const icsData = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:${title}\nDTSTART:${startRaw}\nDTEND:${endRaw}\nLOCATION:${loc}\nEND:VEVENT\nEND:VCALENDAR`;
+    const startISO = toOutlookFormat(startRaw);
+    const endISO = toOutlookFormat(endRaw);
+
+    // 1. OUTLOOK FIX: Using the "compose" deep link with explicit ISO strings
+    document.getElementById('outLink').href = "https://outlook.office.com/calendar/0/deeplink/compose?subject=" + encodeURIComponent(title) + "&startdt=" + startISO + "&enddt=" + endISO + "&location=" + encodeURIComponent(loc);
+    
+    // 2. GOOGLE
+    document.getElementById('gooLink').href = "https://calendar.google.com/calendar/render?action=TEMPLATE&text=" + encodeURIComponent(title) + "&dates=" + startRaw + "/" + endRaw + "&location=" + encodeURIComponent(loc);
+
+    // 3. DEFAULT (ICS)
+    const icsData = "BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:" + title + "\nDTSTART:" + startRaw + "\nDTEND:" + endRaw + "\nLOCATION:" + loc + "\nEND:VEVENT\nEND:VCALENDAR";
     document.getElementById('icsLink').href = "data:text/calendar;charset=utf8," + encodeURIComponent(icsData);
 </script>
 </body>
