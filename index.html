@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Add to Calendar</title>
+    <style>
+        body { font-family: -apple-system, sans-serif; text-align: center; padding: 40px 20px; background: #f0f2f5; color: #1c1e21; }
+        .card { background: white; padding: 30px; border-radius: 20px; shadow: 0 10px 25px rgba(0,0,0,0.1); max-width: 400px; margin: auto; border: 1px solid #ddd; }
+        h2 { margin-top: 0; color: #0078d4; }
+        .btn { display: block; padding: 16px; margin: 12px 0; border-radius: 12px; text-decoration: none; font-weight: bold; color: white; font-size: 18px; }
+        .outlook { background: #0078d4; } /* Outlook Blue */
+        .google { background: #34a853; } /* Google Green */
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2 id="title">Event Name</h2>
+        <p id="details"></p>
+        <a id="outLink" class="btn outlook" href="#">Add to Outlook</a>
+        <a id="gooLink" class="btn google" href="#">Add to Google</a>
+    </div>
+    <script>
+        const p = new URLSearchParams(window.location.search);
+        const title = p.get('t') || "My Event";
+        const start = p.get('s') || "20260101T090000"; 
+        const loc = p.get('l') || "Location TBD";
+
+        document.getElementById('title').innerText = title;
+        document.getElementById('details').innerText = "Location: " + loc;
+
+        // Dynamic Outlook Link
+        document.getElementById('outLink').href = `https://outlook.office.com/calendar/0/deeplink/compose?subject=${encodeURIComponent(title)}&startdt=${start}&location=${encodeURIComponent(loc)}`;
+        
+        // Dynamic Google Link
+        document.getElementById('gooLink').href = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${start}/${start}&location=${encodeURIComponent(loc)}`;
+    </script>
+</body>
+</html>
