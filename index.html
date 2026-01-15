@@ -63,6 +63,7 @@
     const eISO = e ? toIsoString(e) : sISO;
 
     // --- 4. Outlook Link ---
+    // Using the /owa/ endpoint is safer for iOS redirects than the /deeplink/ one
     const outParams = new URLSearchParams({
         path:'/calendar/action/compose',
         rru:'addevent',
@@ -71,7 +72,8 @@
         subject:title,
         location:l
     });
-    document.getElementById('outLink').href = "https://outlook.office.com/calendar/0/deeplink/compose?"+outParams.toString();
+    if(isAllDay) outParams.append('allday', 'true');
+    document.getElementById('outLink').href = "https://outlook.office.com/owa/?"+outParams.toString();
 
     // --- 5. Google Link ---
     const gooParams = new URLSearchParams({
@@ -82,10 +84,11 @@
     });
     document.getElementById('gooLink').href = "https://calendar.google.com/calendar/render?"+gooParams.toString();
 
-    // --- 6. Default Calendar (Android Intent or ICS) ---
+    // --- 6. Default Calendar (The Reliable Fix) ---
     const icsBtn = document.getElementById('icsLink');
+    
+    // We strictly identify iOS to give it special treatment
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
-    const isAndroid = /Android/.test(navigator.userAgent);
 
     const staticUID = s+"-"+title.replace(/[^a-zA-Z0-9]/g,'').substring(0,15)+"@myapp";
     const icsBody = [
@@ -101,24 +104,16 @@
         "END:VCALENDAR"
     ].join("\r\n");
 
-    if(isAndroid){
-        // Android: Intent URL for instant "Add Event"
-        const startDate = new Date(yr, mo, dy, parseInt(s.substring(9,11)||0), parseInt(s.substring(11,13)||0));
-        let endDate;
-        if(e){
-            const eYr=parseInt(e.substring(0,4)), eMo=parseInt(e.substring(4,6))-1, eDy=parseInt(e.substring(6,8)), eH=parseInt(e.substring(9,11]), eM=parseInt(e.substring(11,13]);
-            endDate = new Date(eYr,eMo,eDy,eH,eM);
-        } else { endDate = new Date(startDate.getTime() + 60*60*1000); }
-        const intent = `intent://insert?title=${encodeURIComponent(title)}&beginTime=${startDate.getTime()}&endTime=${endDate.getTime()}&eventLocation=${encodeURIComponent(l)}#Intent;scheme=content;type=vnd.android.cursor.item/event;end`;
-        icsBtn.href = intent;
-    } else if(isIOS){
-        // iOS: data URI + no download attribute
+    if(isIOS){
+        // iOS: Data URI + NO download attribute (Triggers Pop-up)
         icsBtn.href = "data:text/calendar;charset=utf8,"+encodeURIComponent(icsBody);
     } else {
-        // Desktop: Blob + download
+        // Android & Desktop: Blob + Download Attribute (Reliable Download)
+        // This fixes the "Refresh" bug because it's a standard file download, not an intent.
         const blob = new Blob([icsBody], {type:'text/calendar;charset=utf-8'});
         icsBtn.href = window.URL.createObjectURL(blob);
-        icsBtn.setAttribute("download", title.replace(/[^a-zA-Z0-9]/g,'_').substring(0,30)+".ics");
+        const cleanTitle = title.replace(/[^a-zA-Z0-9]/g,'_').substring(0,30);
+        icsBtn.setAttribute("download", cleanTitle+".ics");
     }
 })();
 </script>
