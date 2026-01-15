@@ -17,105 +17,118 @@
     </style>
 </head>
 <body>
-<div class="card">
-    <h2 id="title">New Event</h2>
-    <div id="dateRow" class="date-display"></div>
-    <div id="timeRow" class="time-display"></div>
-    <p id="locRow" style="color: #666; margin-bottom: 20px;"></p>
-
-    <a id="outLink" class="btn outlook" href="#" target="_blank">Add to Outlook</a>
-    <a id="gooLink" class="btn google" href="#" target="_blank">Add to Google</a>
-    <a id="icsLink" class="btn default" href="#">Add to Default Calendar</a>
-    <p class="note">Note: You may be asked to sign in to your Microsoft account.</p>
-</div>
+    <div class="card">
+        <h2 id="title">New Event</h2>
+        <div id="dateRow" class="date-display"></div>
+        <div id="timeRow" class="time-display"></div>
+        <p id="locRow" style="color: #666; margin-bottom: 20px;"></p>
+        
+        <a id="outLink" class="btn outlook" href="#" target="_blank">Add to Outlook</a>
+        <a id="gooLink" class="btn google" href="#" target="_blank">Add to Google</a>
+        <a id="icsLink" class="btn default" href="#">Add to Default Calendar</a>
+        <p class="note">Note: You may be asked to sign in to your Microsoft account.</p>
+    </div>
 
 <script>
-(function() {
-    // --- 1. Parse URL params ---
-    const p = new URLSearchParams(window.location.search);
-    const title = p.get('t') || "New Event";
-    const s = p.get('s') || "20260203T160000";
-    const e = p.get('e') || "20260203T170000";
-    const l = p.get('l') || "Location TBD";
-    const isAllDay = p.get('allday') === 'true';
+    (function() {
+        // --- 1. Data Setup ---
+        const p = new URLSearchParams(window.location.search);
+        const title = p.get('t') || "New Event";
+        const s = p.get('s') || "20260203T160000"; 
+        const e = p.get('e') || "20260203T170000";
+        const l = p.get('l') || "Location TBD";
+        const isAllDay = p.get('allday') === 'true';
 
-    // --- 2. Visual Display ---
-    const yr = s.substring(0,4);
-    const mo = parseInt(s.substring(4,6))-1;
-    const dy = s.substring(6,8);
-    const dObj = new Date(yr, mo, dy);
-    document.getElementById('title').innerText = title;
-    document.getElementById('locRow').innerText = "📍 " + l;
-    document.getElementById('dateRow').innerText = dObj.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
+        // --- 2. Visuals ---
+        const yr = s.substring(0,4);
+        const mo = parseInt(s.substring(4,6)) - 1;
+        const dy = s.substring(6,8);
+        const dObj = new Date(yr, mo, dy);
+        document.getElementById('title').innerText = title;
+        document.getElementById('locRow').innerText = "📍 " + l;
+        document.getElementById('dateRow').innerText = dObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
-    function fmt(ts){
-        if(ts.length<9) return "";
-        let h = parseInt(ts.substring(9,11)), m = ts.substring(11,13);
-        let a = h>=12?'PM':'AM';
-        h = h%12||12;
-        return h+":"+m+" "+a;
-    }
-    document.getElementById('timeRow').innerText = isAllDay ? "All Day Event" : (fmt(s)+(e ? " - "+fmt(e) : ""));
+        function fmt(ts) {
+            if (ts.length < 9) return ""; 
+            let h = parseInt(ts.substring(9,11));
+            let m = ts.substring(11,13);
+            let a = h >= 12 ? 'PM' : 'AM';
+            h = h % 12 || 12;
+            return h + ":" + m + " " + a;
+        }
+        document.getElementById('timeRow').innerText = isAllDay ? "All Day Event" : (fmt(s) + (e ? " - " + fmt(e) : ""));
 
-    // --- 3. ISO Helper ---
-    function toIsoString(ts){ return ts.substring(0,4)+"-"+ts.substring(4,6)+"-"+ts.substring(6,8)+"T"+ts.substring(9,11)+":"+ts.substring(11,13)+":00"; }
-    const sISO = toIsoString(s);
-    const eISO = e ? toIsoString(e) : sISO;
+        // --- 3. ISO Helper ---
+        function toIsoString(ts) {
+            return ts.substring(0,4) + "-" + ts.substring(4,6) + "-" + ts.substring(6,8) + "T" + ts.substring(9,11) + ":" + ts.substring(11,13) + ":00";
+        }
+        const sISO = toIsoString(s);
+        const eISO = e ? toIsoString(e) : sISO;
 
-    // --- 4. Outlook Link ---
-    // Using the /owa/ endpoint is safer for iOS redirects than the /deeplink/ one
-    const outParams = new URLSearchParams({
-        path:'/calendar/action/compose',
-        rru:'addevent',
-        startdt:sISO,
-        enddt:eISO,
-        subject:title,
-        location:l
-    });
-    if(isAllDay) outParams.append('allday', 'true');
-    document.getElementById('outLink').href = "https://outlook.office.com/owa/?"+outParams.toString();
+        // --- 4. Links ---
 
-    // --- 5. Google Link ---
-    const gooParams = new URLSearchParams({
-        action:'TEMPLATE',
-        text:title,
-        dates:isAllDay ? s.substring(0,8)+"/"+(e.substring(0,8)||s.substring(0,8)) : s+"/"+(e||s),
-        location:l
-    });
-    document.getElementById('gooLink').href = "https://calendar.google.com/calendar/render?"+gooParams.toString();
+        // Outlook
+        const outParams = new URLSearchParams({
+            path: '/calendar/action/compose',
+            rru: 'addevent',
+            startdt: sISO,
+            enddt: eISO,
+            subject: title,
+            location: l
+        });
+        document.getElementById('outLink').href = "https://outlook.office.com/calendar/0/deeplink/compose?" + outParams.toString();
 
-    // --- 6. Default Calendar (The Reliable Fix) ---
-    const icsBtn = document.getElementById('icsLink');
-    
-    // We strictly identify iOS to give it special treatment
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+        // Google
+        const gooParams = new URLSearchParams({
+            action: 'TEMPLATE',
+            text: title,
+            dates: (isAllDay ? s.substring(0,8) + "/" + (e.substring(0,8) || s.substring(0,8)) : s + "/" + (e || s)),
+            location: l
+        });
+        document.getElementById('gooLink').href = "https://calendar.google.com/calendar/render?" + gooParams.toString();
 
-    const staticUID = s+"-"+title.replace(/[^a-zA-Z0-9]/g,'').substring(0,15)+"@myapp";
-    const icsBody = [
-        "BEGIN:VCALENDAR",
-        "VERSION:2.0",
-        "PRODID:-//My Calendar App//EN",
-        "BEGIN:VEVENT",
-        "UID:"+staticUID,
-        "SUMMARY:"+title,
-        isAllDay ? "DTSTART;VALUE=DATE:"+s.substring(0,8)+"\r\nDTEND;VALUE=DATE:"+(e.substring(0,8)||s.substring(0,8)) : "DTSTART:"+s+"\r\nDTEND:"+e,
-        "LOCATION:"+l,
-        "END:VEVENT",
-        "END:VCALENDAR"
-    ].join("\r\n");
+        // --- 5. Default Calendar (Fixed for Android "Unable to Launch") ---
+        
+        // A. Generate DTSTAMP (Current Time in UTC) - REQUIRED for Android
+        const now = new Date();
+        const dtStamp = now.toISOString().replace(/[-:]/g, '').split('.')[0] + "Z";
+        
+        // B. Generate UID
+        const staticUID = s + "-" + title.replace(/[^a-zA-Z0-9]/g, '').substring(0,15) + "@myapp";
 
-    if(isIOS){
-        // iOS: Data URI + NO download attribute (Triggers Pop-up)
-        icsBtn.href = "data:text/calendar;charset=utf8,"+encodeURIComponent(icsBody);
-    } else {
-        // Android & Desktop: Blob + Download Attribute (Reliable Download)
-        // This fixes the "Refresh" bug because it's a standard file download, not an intent.
-        const blob = new Blob([icsBody], {type:'text/calendar;charset=utf-8'});
-        icsBtn.href = window.URL.createObjectURL(blob);
-        const cleanTitle = title.replace(/[^a-zA-Z0-9]/g,'_').substring(0,30);
-        icsBtn.setAttribute("download", cleanTitle+".ics");
-    }
-})();
+        const icsBody = [
+            "BEGIN:VCALENDAR",
+            "VERSION:2.0",
+            "PRODID:-//My Calendar App//EN",
+            "METHOD:PUBLISH", // Helps Android understand this is an 'Add' action
+            "BEGIN:VEVENT",
+            "UID:" + staticUID,
+            "DTSTAMP:" + dtStamp, // <-- THIS WAS MISSING. FIXES "UNABLE TO LAUNCH"
+            "SUMMARY:" + title,
+            isAllDay 
+                ? "DTSTART;VALUE=DATE:" + s.substring(0,8) + "\r\nDTEND;VALUE=DATE:" + (e.substring(0,8) || s.substring(0,8))
+                : "DTSTART:" + s + "\r\nDTEND:" + e,
+            "LOCATION:" + l,
+            "END:VEVENT",
+            "END:VCALENDAR"
+        ].join("\r\n");
+
+        const icsBtn = document.getElementById('icsLink');
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+        if (isIOS) {
+            // iOS: Data URI (Pop up)
+            icsBtn.href = "data:text/calendar;charset=utf8," + encodeURIComponent(icsBody);
+        } else {
+            // Android: Blob Download
+            const blob = new Blob([icsBody], { type: 'text/calendar;charset=utf-8' });
+            icsBtn.href = window.URL.createObjectURL(blob);
+            
+            // Clean Filename
+            const cleanTitle = title.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+            icsBtn.setAttribute("download", cleanTitle + ".ics");
+        }
+    })();
 </script>
 </body>
 </html>
