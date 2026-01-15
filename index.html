@@ -66,7 +66,6 @@
         const eISO = e ? toIsoString(e) : sISO;
 
         // --- 4. Links ---
-        // Outlook
         const outParams = new URLSearchParams({
             path: '/calendar/action/compose',
             rru: 'addevent',
@@ -77,7 +76,6 @@
         });
         document.getElementById('outLink').href = "https://outlook.office.com/calendar/0/deeplink/compose?" + outParams.toString();
 
-        // Google
         const gooParams = new URLSearchParams({
             action: 'TEMPLATE',
             text: title,
@@ -86,20 +84,26 @@
         });
         document.getElementById('gooLink').href = "https://calendar.google.com/calendar/render?" + gooParams.toString();
 
-        // --- 5. Default Calendar Logic (The Android Hider) ---
+        // --- 5. Logic: HIDE Default Button in Hostile Environments ---
         const icsBtn = document.getElementById('icsLink');
-        const isAndroid = /Android/i.test(navigator.userAgent);
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        const ua = navigator.userAgent || navigator.vendor || window.opera;
+        
+        // Detect Android
+        const isAndroid = /Android/i.test(ua);
+        
+        // Detect "In-App" Browsers on iOS (Google App, Gmail, etc.)
+        // 'GSA' = Google Search App
+        // 'FBAV' = Facebook
+        // 'Instagram' = Instagram
+        // These apps block the 'data:' URI method we use for the popup.
+        const isInAppBrowser = /GSA|FBAV|Instagram/i.test(ua);
 
-        if (isAndroid) {
-            // STRATEGY: HIDE BUTTON ON ANDROID
-            // Android users struggle with ICS downloads. 
-            // We force them to use the robust Google/Outlook buttons.
+        if (isAndroid || isInAppBrowser) {
+            // HIDE BUTTON: The environment blocks file generation or downloads are confusing.
             icsBtn.style.display = 'none';
 
         } else {
-            // STRATEGY: KEEP BUTTON FOR IOS & DESKTOP
-            // Generate standard ICS data
+            // SHOW BUTTON: Safari (iOS) or Desktop
             const now = new Date();
             const dtStamp = now.toISOString().replace(/[-:]/g, '').split('.')[0] + "Z";
             const staticUID = s + "-" + title.replace(/[^a-zA-Z0-9]/g, '').substring(0,15) + "@myapp";
@@ -121,8 +125,10 @@
                 "END:VCALENDAR"
             ].join("\r\n");
 
+            const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
             if (isIOS) {
-                // iOS: Pop-up via Data URI
+                // iOS Safari: Pop-up via Data URI
                 icsBtn.href = "data:text/calendar;charset=utf8," + encodeURIComponent(icsBody);
             } else {
                 // Desktop: Download via Blob
