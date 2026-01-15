@@ -65,7 +65,7 @@
         const sISO = toIsoString(s);
         const eISO = e ? toIsoString(e) : sISO;
 
-        // --- 4. Links ---
+        // --- 4. Links (Outlook & Google) ---
         const outParams = new URLSearchParams({
             path: '/calendar/action/compose',
             rru: 'addevent',
@@ -84,26 +84,36 @@
         });
         document.getElementById('gooLink').href = "https://calendar.google.com/calendar/render?" + gooParams.toString();
 
-        // --- 5. Logic: HIDE Default Button in Hostile Environments ---
+        // --- 5. Default Calendar Visibility Logic ---
         const icsBtn = document.getElementById('icsLink');
-        const ua = navigator.userAgent || navigator.vendor || window.opera;
+        const ua = navigator.userAgent;
         
-        // Detect Android
+        // A. Check for Android
         const isAndroid = /Android/i.test(ua);
-        
-        // Detect "In-App" Browsers on iOS (Google App, Gmail, etc.)
-        // 'GSA' = Google Search App
-        // 'FBAV' = Facebook
-        // 'Instagram' = Instagram
-        // These apps block the 'data:' URI method we use for the popup.
-        const isInAppBrowser = /GSA|FBAV|Instagram/i.test(ua);
 
-        if (isAndroid || isInAppBrowser) {
-            // HIDE BUTTON: The environment blocks file generation or downloads are confusing.
+        // B. Check for iOS
+        const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+        // C. STRICT SAFARI CHECK
+        // True Safari on iOS typically has "Safari" and "Version" in the User Agent.
+        // Third-party iOS browsers (Chrome, Google App, FB) add their own tags (CriOS, GSA, FBAV) 
+        // and often remove "Version".
+        const isRealSafari = isIOS && 
+                             /Safari/i.test(ua) && 
+                             /Version/i.test(ua) && 
+                             !/CriOS|FxiOS|EdgiOS|GSA|Google|FBAV|Instagram|Pinterest|Snapchat|LinkedIn/i.test(ua);
+
+        // LOGIC:
+        // 1. If Android -> Hide (User preference)
+        // 2. If iOS AND NOT Real Safari -> Hide (Fixes "dead click" in Google App, Chrome iOS, etc.)
+        // 3. Otherwise (Real Safari or Desktop) -> Show
+        
+        if (isAndroid || (isIOS && !isRealSafari)) {
+            
             icsBtn.style.display = 'none';
 
         } else {
-            // SHOW BUTTON: Safari (iOS) or Desktop
+            // --- GENERATE ICS FOR VALID BROWSERS ---
             const now = new Date();
             const dtStamp = now.toISOString().replace(/[-:]/g, '').split('.')[0] + "Z";
             const staticUID = s + "-" + title.replace(/[^a-zA-Z0-9]/g, '').substring(0,15) + "@myapp";
@@ -125,13 +135,11 @@
                 "END:VCALENDAR"
             ].join("\r\n");
 
-            const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-
             if (isIOS) {
-                // iOS Safari: Pop-up via Data URI
+                // iOS Safari: Pop-up
                 icsBtn.href = "data:text/calendar;charset=utf8," + encodeURIComponent(icsBody);
             } else {
-                // Desktop: Download via Blob
+                // Desktop: Download
                 const blob = new Blob([icsBody], { type: 'text/calendar;charset=utf-8' });
                 icsBtn.href = window.URL.createObjectURL(blob);
                 const cleanTitle = title.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
