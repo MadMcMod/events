@@ -13,6 +13,7 @@
         .outlook { background: #0078d4; }
         .google { background: #34a853; }
         .default { background: #555; }
+        .note { font-size: 12px; color: #999; margin-top: 15px; font-style: italic; }
     </style>
 </head>
 <body>
@@ -22,13 +23,15 @@
         <div id="timeRow" class="time-display">Time of Event</div>
         <p id="locRow" style="color: #666; margin-bottom: 20px;">Location TBD</p>
         
-        <a id="outLink" class="btn outlook" href="#">Add to Outlook</a>
-        <a id="gooLink" class="btn google" href="#">Add to Google</a>
-        <a id="icsLink" class="btn default" href="#">Add to Default Calendar</a>
+        <a id="outLink" class="btn outlook" href="#" target="_blank">Add to Outlook</a>
+        <a id="gooLink" class="btn google" href="#" target="_blank">Add to Google</a>
+        <a id="icsLink" class="btn default" href="#" download="event.ics">Add to Default Calendar</a>
+        <p class="note">Note: You may be asked to sign in to your Microsoft account.</p>
     </div>
 
 <script>
     (function() {
+        // Prevent Safari BFCache glitches
         window.onpageshow = function(event) {
             if (event.persisted) window.location.reload();
         };
@@ -43,23 +46,17 @@
         document.getElementById('title').innerText = title;
         document.getElementById('locRow').innerText = "📍 " + l;
 
-        function offsetForDate(y, m, d) {
-            const dt = new Date(y, m - 1, d);
-            const o = -dt.getTimezoneOffset();
-            const sign = o >= 0 ? '+' : '-';
-            const hh = String(Math.floor(Math.abs(o) / 60)).padStart(2, '0');
-            return `${sign}${hh}:00`;
-        }
-
-        function toOutlookISO(ts, allDay) {
+        // Helper: Format raw YYYYMMDDTHHMM to ISO format YYYY-MM-DDTHH:MM:SS
+        // We use Floating time (no Z, no offset) to let the Calendar decide the timezone based on the user's current location
+        function formatISO(ts) {
+            if (!ts) return "";
             const y = ts.substring(0,4);
             const m = ts.substring(4,6);
             const d = ts.substring(6,8);
-            const tz = offsetForDate(parseInt(y), parseInt(m), parseInt(d));
-            if (allDay || ts.length < 9) return `${y}-${m}-${d}T00:00:00${tz}`;
+            if (ts.length < 9) return `${y}-${m}-${d}`;
             const h = ts.substring(9,11);
             const min = ts.substring(11,13);
-            return `${y}-${m}-${d}T${h}:${min}:00${tz}`;
+            return `${y}-${m}-${d}T${h}:${min}:00`;
         }
 
         if (s) {
@@ -81,27 +78,54 @@
 
             document.getElementById('timeRow').innerText = isAllDay ? "All Day Event" : (fmt(s) + (e ? " - " + fmt(e) : ""));
 
-            const sISO = toOutlookISO(s, isAllDay);
-            const eISO = e ? toOutlookISO(e, isAllDay) : sISO;
-
-            // 1. Outlook
-            const outParams = new URLSearchParams({ subject: title, location: l, startdt: sISO, enddt: eISO });
+            // 1. Outlook Fix: Use the "Classic" OWA link instead of the "Deeplink"
+            // The OWA link survives the iOS login redirect loop much better
+            const sISO = formatISO(s);
+            const eISO = e ? formatISO(e) : sISO;
+            
+            const outParams = new URLSearchParams({
+                path: '/calendar/action/compose',
+                rru: 'addevent',
+                startdt: sISO,
+                enddt: eISO,
+                subject: title,
+                location: l
+            });
             if (isAllDay) outParams.append('allday', 'true');
-            document.getElementById('outLink').href = "https://outlook.office.com/calendar/0/deeplink/compose?" + outParams.toString();
+            // Using outlook.office.com/owa covers both Business and Personal usually
+            document.getElementById('outLink').href = "https://outlook.office.com/owa/?" + outParams.toString();
 
-            // 2. Google
-            const gooParams = new URLSearchParams({ action: 'TEMPLATE', text: title, dates: (isAllDay ? s.substring(0,8) + "/" + (e.substring(0,8) || s.substring(0,8)) : s + "/" + (e || s)), location: l });
+            // 2. Google (Existing Logic was mostly fine, just ensured dates are clean)
+            const gooParams = new URLSearchParams({
+                action: 'TEMPLATE',
+                text: title,
+                dates: (isAllDay ? s.substring(0,8) + "/" + (e.substring(0,8) || s.substring(0,8)) : s + "00/" + (e || s) + "00"),
+                location: l
+            });
             document.getElementById('gooLink').href = "https://calendar.google.com/calendar/render?" + gooParams.toString();
 
-            // 3. Apple/Default Calendar (REVERTED TO DATA URI)
-            const icsData = isAllDay ? 
-                `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:${title}\nDTSTART;VALUE=DATE:${s.substring(0,8)}\nDTEND;VALUE=DATE:${e.substring(0,8) || s.substring(0,8)}\nLOCATION:${l}\nX-MICROSOFT-CDO-ALLDAYEVENT:TRUE\nEND:VEVENT\nEND:VCALENDAR` :
-                `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:${title}\nDTSTART:${s}00\nDTEND:${(e || s)}00\nLOCATION:${l}\nEND:VEVENT\nEND:VCALENDAR`;
+            // 3. Apple/ICS Fix: Cleaned up structure and UID
+            // Mobile Safari requires strict formatting. We add '00' for seconds.
+            const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + "Z";
             
-            const icsBtn = document.getElementById('icsLink');
-            // Using base64 encoding to make the string "safer" for Safari's address bar
-            const base64Data = btoa(unescape(encodeURIComponent(icsData)));
-            icsBtn.href = "data:text/calendar;base64," + base64Data;
+            const icsBody = [
+                'BEGIN:VCALENDAR',
+                'VERSION:2.0',
+                'PRODID:-//My Calendar App//EN',
+                'BEGIN:VEVENT',
+                `UID:${now}-${Math.floor(Math.random() * 10000)}@myapp.com`,
+                `DTSTAMP:${now}`,
+                `SUMMARY:${title}`,
+                `LOCATION:${l}`,
+                isAllDay 
+                    ? `DTSTART;VALUE=DATE:${s.substring(0,8)}\nDTEND;VALUE=DATE:${e.substring(0,8) || s.substring(0,8)}`
+                    : `DTSTART:${s}00\nDTEND:${e ? e + '00' : s + '00'}`,
+                'END:VEVENT',
+                'END:VCALENDAR'
+            ].join('\n');
+
+            // Encode specifically for URI component to avoid breaking Safari data parsing
+            document.getElementById('icsLink').href = "data:text/calendar;charset=utf8," + encodeURIComponent(icsBody);
             
         } else {
             document.getElementById('dateRow').innerText = "Event Details Missing";
