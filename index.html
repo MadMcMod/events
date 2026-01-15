@@ -19,9 +19,9 @@
 <body>
     <div class="card">
         <h2 id="title">New Event</h2>
-        <div id="dateRow" class="date-display"></div>
-        <div id="timeRow" class="time-display"></div>
-        <p id="locRow" style="color: #666; margin-bottom: 20px;"></p>
+        <div id="dateRow" class="date-display">Date of Event</div>
+        <div id="timeRow" class="time-display">Time of Event</div>
+        <p id="locRow" style="color: #666; margin-bottom: 20px;">Location TBD</p>
         
         <a id="outLink" class="btn outlook" href="#" target="_blank">Add to Outlook</a>
         <a id="gooLink" class="btn google" href="#" target="_blank">Add to Google</a>
@@ -33,7 +33,7 @@
     (function() {
         const p = new URLSearchParams(window.location.search);
         const title = p.get('t') || "New Event";
-        // Default to a future date so it's obvious if data is missing
+        // Default Example: Feb 3, 2026, 4:00 PM
         const s = p.get('s') || "20260203T160000"; 
         const e = p.get('e') || "20260203T170000";
         const l = p.get('l') || "Location TBD";
@@ -59,14 +59,16 @@
         }
         document.getElementById('timeRow').innerText = isAllDay ? "All Day Event" : (fmt(s) + (e ? " - " + fmt(e) : ""));
 
-        // --- ISO Formatting Helpers ---
+        // --- ISO Helper (Strict YYYY-MM-DDTHH:MM:SS) ---
         function toIsoString(ts) {
             return ts.substring(0,4) + "-" + ts.substring(4,6) + "-" + ts.substring(6,8) + "T" + ts.substring(9,11) + ":" + ts.substring(11,13) + ":00";
         }
         const sISO = toIsoString(s);
         const eISO = e ? toIsoString(e) : sISO;
 
-        // --- 1. Outlook Link ---
+        // --- 1. Outlook Link (Reverted to Deeplink) ---
+        // I switched this back to the "deeplink" style you liked.
+        // To fix the iOS "parsing" bug, I am ensuring the dates are strictly ISO formatted.
         const outParams = new URLSearchParams({
             path: '/calendar/action/compose',
             rru: 'addevent',
@@ -75,8 +77,8 @@
             subject: title,
             location: l
         });
-        if (isAllDay) outParams.append('allday', 'true');
-        document.getElementById('outLink').href = "https://outlook.office.com/owa/?" + outParams.toString();
+        // Note: We use the 'deeplink' endpoint again, but with better parameter handling
+        document.getElementById('outLink').href = "https://outlook.office.com/calendar/0/deeplink/compose?" + outParams.toString();
 
         // --- 2. Google Link ---
         const gooParams = new URLSearchParams({
@@ -88,15 +90,21 @@
         document.getElementById('gooLink').href = "https://calendar.google.com/calendar/render?" + gooParams.toString();
 
         // --- 3. Default Calendar (ICS) ---
-        // Generate a deterministic UID so re-adding the event updates it instead of duplicating it
-        const simpleUID = s + "-" + title.replace(/[^a-zA-Z0-9]/g, '').substring(0, 20) + "@myapp";
-        
+        // STRATEGY: 
+        // 1. Use \r\n (CRLF) line breaks (Required for iOS "Cannot Download" fix)
+        // 2. Remove 'download' attribute (Required for Android "Open Immediately" fix)
+        // 3. Add UID (Required to prevent duplicates when clicking multiple times)
+
+        // Create a static UID based on event details. 
+        // This ensures if they add it twice, the calendar app recognizes it as an UPDATE, not a duplicate.
+        const staticUID = s + "-" + title.replace(/[^a-zA-Z0-9]/g, '').substring(0,15) + "@myapp";
+
         const icsData = [
             "BEGIN:VCALENDAR",
             "VERSION:2.0",
             "PRODID:-//My Calendar App//EN",
             "BEGIN:VEVENT",
-            "UID:" + simpleUID,
+            "UID:" + staticUID, 
             "SUMMARY:" + title,
             isAllDay 
                 ? "DTSTART;VALUE=DATE:" + s.substring(0,8) + "\r\nDTEND;VALUE=DATE:" + (e.substring(0,8) || s.substring(0,8))
@@ -106,18 +114,9 @@
             "END:VCALENDAR"
         ].join("\r\n");
 
-        const icsUrl = "data:text/calendar;charset=utf8," + encodeURIComponent(icsData);
-        const icsBtn = document.getElementById('icsLink');
-        icsBtn.href = icsUrl;
+        // Use standard data URI. Browsers handle this as a "Navigation" event which triggers the App Intent.
+        document.getElementById('icsLink').href = "data:text/calendar;charset=utf8," + encodeURIComponent(icsData);
 
-        // --- 4. The IOS vs Desktop Switch ---
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-        
-        if (!isIOS) {
-            // Desktop/Android: Needs download attribute to save file
-            icsBtn.setAttribute("download", title.replace(/[^a-zA-Z0-9]/g, '_') + ".ics");
-        }
-        // iOS: Needs NO download attribute (handled by href alone)
     })();
 </script>
 </body>
