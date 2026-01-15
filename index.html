@@ -66,7 +66,6 @@
         const eISO = e ? toIsoString(e) : sISO;
 
         // --- 4. Links ---
-
         // Outlook
         const outParams = new URLSearchParams({
             path: '/calendar/action/compose',
@@ -87,46 +86,51 @@
         });
         document.getElementById('gooLink').href = "https://calendar.google.com/calendar/render?" + gooParams.toString();
 
-        // --- 5. Default Calendar (Fixed for Android "Unable to Launch") ---
-        
-        // A. Generate DTSTAMP (Current Time in UTC) - REQUIRED for Android
-        const now = new Date();
-        const dtStamp = now.toISOString().replace(/[-:]/g, '').split('.')[0] + "Z";
-        
-        // B. Generate UID
-        const staticUID = s + "-" + title.replace(/[^a-zA-Z0-9]/g, '').substring(0,15) + "@myapp";
-
-        const icsBody = [
-            "BEGIN:VCALENDAR",
-            "VERSION:2.0",
-            "PRODID:-//My Calendar App//EN",
-            "METHOD:PUBLISH", // Helps Android understand this is an 'Add' action
-            "BEGIN:VEVENT",
-            "UID:" + staticUID,
-            "DTSTAMP:" + dtStamp, // <-- THIS WAS MISSING. FIXES "UNABLE TO LAUNCH"
-            "SUMMARY:" + title,
-            isAllDay 
-                ? "DTSTART;VALUE=DATE:" + s.substring(0,8) + "\r\nDTEND;VALUE=DATE:" + (e.substring(0,8) || s.substring(0,8))
-                : "DTSTART:" + s + "\r\nDTEND:" + e,
-            "LOCATION:" + l,
-            "END:VEVENT",
-            "END:VCALENDAR"
-        ].join("\r\n");
-
+        // --- 5. Default Calendar Logic (The Android Hider) ---
         const icsBtn = document.getElementById('icsLink');
+        const isAndroid = /Android/i.test(navigator.userAgent);
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-        if (isIOS) {
-            // iOS: Data URI (Pop up)
-            icsBtn.href = "data:text/calendar;charset=utf8," + encodeURIComponent(icsBody);
+        if (isAndroid) {
+            // STRATEGY: HIDE BUTTON ON ANDROID
+            // Android users struggle with ICS downloads. 
+            // We force them to use the robust Google/Outlook buttons.
+            icsBtn.style.display = 'none';
+
         } else {
-            // Android: Blob Download
-            const blob = new Blob([icsBody], { type: 'text/calendar;charset=utf-8' });
-            icsBtn.href = window.URL.createObjectURL(blob);
-            
-            // Clean Filename
-            const cleanTitle = title.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
-            icsBtn.setAttribute("download", cleanTitle + ".ics");
+            // STRATEGY: KEEP BUTTON FOR IOS & DESKTOP
+            // Generate standard ICS data
+            const now = new Date();
+            const dtStamp = now.toISOString().replace(/[-:]/g, '').split('.')[0] + "Z";
+            const staticUID = s + "-" + title.replace(/[^a-zA-Z0-9]/g, '').substring(0,15) + "@myapp";
+
+            const icsBody = [
+                "BEGIN:VCALENDAR",
+                "VERSION:2.0",
+                "PRODID:-//My Calendar App//EN",
+                "METHOD:PUBLISH",
+                "BEGIN:VEVENT",
+                "UID:" + staticUID,
+                "DTSTAMP:" + dtStamp,
+                "SUMMARY:" + title,
+                isAllDay 
+                    ? "DTSTART;VALUE=DATE:" + s.substring(0,8) + "\r\nDTEND;VALUE=DATE:" + (e.substring(0,8) || s.substring(0,8))
+                    : "DTSTART:" + s + "\r\nDTEND:" + e,
+                "LOCATION:" + l,
+                "END:VEVENT",
+                "END:VCALENDAR"
+            ].join("\r\n");
+
+            if (isIOS) {
+                // iOS: Pop-up via Data URI
+                icsBtn.href = "data:text/calendar;charset=utf8," + encodeURIComponent(icsBody);
+            } else {
+                // Desktop: Download via Blob
+                const blob = new Blob([icsBody], { type: 'text/calendar;charset=utf-8' });
+                icsBtn.href = window.URL.createObjectURL(blob);
+                const cleanTitle = title.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+                icsBtn.setAttribute("download", cleanTitle + ".ics");
+            }
         }
     })();
 </script>
