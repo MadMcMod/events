@@ -13,6 +13,7 @@
         .outlook { background: #0078d4; }
         .google { background: #34a853; }
         .default { background: #555; }
+        .note { font-size: 12px; color: #999; margin-top: 15px; font-style: italic; }
     </style>
 </head>
 <body>
@@ -25,6 +26,7 @@
         <a id="outLink" class="btn outlook" href="#">Add to Outlook</a>
         <a id="gooLink" class="btn google" href="#">Add to Google</a>
         <a id="icsLink" class="btn default" href="#">Add to Default Calendar</a>
+        <p class="note">Note: You may be asked to sign in to your Microsoft account.</p>
     </div>
 
 <script>
@@ -44,7 +46,7 @@
         document.getElementById('title').innerText = title;
         document.getElementById('locRow').innerText = "📍 " + l;
 
-        // NEW: DST-Aware Offset (Calculates for the actual event date)
+        // DST-Aware Offset calculation
         function offsetForDate(y, m, d) {
             const dt = new Date(y, m - 1, d);
             const o = -dt.getTimezoneOffset();
@@ -53,7 +55,7 @@
             return `${sign}${hh}:00`;
         }
 
-        // Refined Outlook ISO (RFC 3339 with Correct Local Offset)
+        // Strict RFC 3339 for Outlook compatibility
         function toOutlookISO(ts, allDay) {
             const y = ts.substring(0,4);
             const m = ts.substring(4,6);
@@ -91,7 +93,7 @@
             const sISO = toOutlookISO(s, isAllDay);
             const eISO = e ? toOutlookISO(e, isAllDay) : sISO;
 
-            // 1. Outlook: Production-grade RFC 3339 + live.com endpoint
+            // 1. Outlook: Using the more compatible office.com endpoint
             const outParams = new URLSearchParams({
                 subject: title,
                 location: l,
@@ -99,9 +101,9 @@
                 enddt: eISO
             });
             if (isAllDay) outParams.append('allday', 'true');
-            document.getElementById('outLink').href = "https://outlook.live.com/calendar/0/deeplink/compose?" + outParams.toString();
+            document.getElementById('outLink').href = "https://outlook.office.com/calendar/0/deeplink/compose?" + outParams.toString();
 
-            // 2. Google: URL Encoded for consistency
+            // 2. Google
             const gooParams = new URLSearchParams({
                 action: 'TEMPLATE',
                 text: title,
@@ -110,7 +112,7 @@
             });
             document.getElementById('gooLink').href = "https://calendar.google.com/calendar/render?" + gooParams.toString();
 
-            // 3. Apple/ICS: Standardized datetime format (adds seconds)
+            // 3. Apple/ICS with proper seconds
             const icsData = isAllDay ? 
                 `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:${title}\nDTSTART;VALUE=DATE:${s.substring(0,8)}\nDTEND;VALUE=DATE:${e.substring(0,8) || s.substring(0,8)}\nLOCATION:${l}\nX-MICROSOFT-CDO-ALLDAYEVENT:TRUE\nEND:VEVENT\nEND:VCALENDAR` :
                 `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:${title}\nDTSTART:${s}00\nDTEND:${(e || s)}00\nLOCATION:${l}\nEND:VEVENT\nEND:VCALENDAR`;
