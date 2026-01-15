@@ -9,11 +9,12 @@
         h2 { margin: 0 0 8px 0; color: #000; font-size: 24px; }
         .date-display { color: #666; font-size: 18px; margin-bottom: 5px; font-weight: 500; }
         .time-display { color: #888; font-size: 16px; margin-bottom: 25px; }
-        .btn { display: block; padding: 16px; margin: 12px 0; border-radius: 12px; text-decoration: none; font-weight: bold; color: white; font-size: 16px; }
+        .btn { display: block; padding: 16px; margin: 12px 0; border-radius: 12px; text-decoration: none; font-weight: bold; color: white; font-size: 16px; transition: transform 0.1s; }
+        .btn:active { transform: scale(0.98); }
         .outlook { background: #0078d4; }
         .google { background: #34a853; }
         .default { background: #555; }
-        .note { font-size: 12px; color: #999; margin-top: 15px; font-style: italic; }
+        .note { font-size: 11px; color: #999; margin-top: 15px; }
     </style>
 </head>
 <body>
@@ -26,11 +27,12 @@
         <a id="outLink" class="btn outlook" href="#">Add to Outlook</a>
         <a id="gooLink" class="btn google" href="#">Add to Google</a>
         <a id="icsLink" class="btn default" href="#">Add to Default Calendar</a>
-        <p class="note">Note: For Outlook, you may be asked to sign in.</p>
+        <p class="note">Note: Outlook may require you to sign in.</p>
     </div>
 
 <script>
     (function() {
+        // Prevent Safari from showing a stale page from memory
         window.onpageshow = function(event) {
             if (event.persisted) window.location.reload();
         };
@@ -45,6 +47,7 @@
         document.getElementById('title').innerText = title;
         document.getElementById('locRow').innerText = "📍 " + l;
 
+        // Correct offset for the specific event date
         function offsetForDate(y, m, d) {
             const dt = new Date(y, m - 1, d);
             const o = -dt.getTimezoneOffset();
@@ -53,6 +56,7 @@
             return `${sign}${hh}:00`;
         }
 
+        // Strict RFC 3339 for Outlook iOS compliance
         function toOutlookISO(ts, allDay) {
             const y = ts.substring(0,4);
             const m = ts.substring(4,6);
@@ -86,24 +90,28 @@
             const sISO = toOutlookISO(s, isAllDay);
             const eISO = e ? toOutlookISO(e, isAllDay) : sISO;
 
-            // 1. Outlook
+            // 1. Outlook Fix
             const outParams = new URLSearchParams({ subject: title, location: l, startdt: sISO, enddt: eISO });
             if (isAllDay) outParams.append('allday', 'true');
             document.getElementById('outLink').href = "https://outlook.office.com/calendar/0/deeplink/compose?" + outParams.toString();
 
-            // 2. Google
+            // 2. Google Fix
             const gooParams = new URLSearchParams({ action: 'TEMPLATE', text: title, dates: (isAllDay ? s.substring(0,8) + "/" + (e.substring(0,8) || s.substring(0,8)) : s + "/" + (e || s)), location: l });
             document.getElementById('gooLink').href = "https://calendar.google.com/calendar/render?" + gooParams.toString();
 
-            // 3. Apple/Default (RESTORE MODAL FIX)
+            // 3. Apple/Default (THE POPUP FIX)
             const icsData = isAllDay ? 
                 `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:${title}\nDTSTART;VALUE=DATE:${s.substring(0,8)}\nDTEND;VALUE=DATE:${e.substring(0,8) || s.substring(0,8)}\nLOCATION:${l}\nX-MICROSOFT-CDO-ALLDAYEVENT:TRUE\nEND:VEVENT\nEND:VCALENDAR` :
                 `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:${title}\nDTSTART:${s}00\nDTEND:${(e || s)}00\nLOCATION:${l}\nEND:VEVENT\nEND:VCALENDAR`;
             
-            // This Blob creation is what forces the iOS popup modal
+            // Create a Blob with a specific MIME type to force the system modal
             const blob = new Blob([icsData], { type: 'text/calendar;charset=utf-8' });
-            document.getElementById('icsLink').href = window.URL.createObjectURL(blob);
-            document.getElementById('icsLink').setAttribute('download', 'event.ics');
+            const icsBtn = document.getElementById('icsLink');
+            
+            // Generate a temporary URL for the Blob
+            icsBtn.href = window.URL.createObjectURL(blob);
+            // Ensure the filename ends in .ics for the OS to recognize it
+            icsBtn.setAttribute('download', 'event.ics');
             
         } else {
             document.getElementById('dateRow').innerText = "Event Details Missing";
