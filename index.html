@@ -9,7 +9,7 @@
         h2 { margin: 0 0 8px 0; color: #000; font-size: 24px; }
         .date-display { color: #666; font-size: 18px; margin-bottom: 5px; font-weight: 500; }
         .time-display { color: #888; font-size: 16px; margin-bottom: 25px; }
-        .btn { display: block; padding: 16px; margin: 12px 0; border-radius: 12px; text-decoration: none; font-weight: bold; color: white; font-size: 16px; }
+        .btn { display: block; padding: 16px; margin: 12px 0; border-radius: 12px; text-decoration: none; font-weight: bold; color: white; font-size: 16px; cursor: pointer; }
         .outlook { background: #0078d4; }
         .google { background: #34a853; }
         .default { background: #555; }
@@ -25,7 +25,7 @@
         
         <a id="outLink" class="btn outlook" href="#" target="_blank">Add to Outlook</a>
         <a id="gooLink" class="btn google" href="#" target="_blank">Add to Google</a>
-        <a id="icsLink" class="btn default" href="#" download="event.ics">Add to Default Calendar</a>
+        <a id="icsLink" class="btn default">Add to Default Calendar</a>
         <p class="note">Note: You may be asked to sign in to your Microsoft account.</p>
     </div>
 
@@ -46,8 +46,6 @@
         document.getElementById('title').innerText = title;
         document.getElementById('locRow').innerText = "📍 " + l;
 
-        // Helper: Format raw YYYYMMDDTHHMM to ISO format YYYY-MM-DDTHH:MM:SS
-        // We use Floating time (no Z, no offset) to let the Calendar decide the timezone based on the user's current location
         function formatISO(ts) {
             if (!ts) return "";
             const y = ts.substring(0,4);
@@ -78,11 +76,9 @@
 
             document.getElementById('timeRow').innerText = isAllDay ? "All Day Event" : (fmt(s) + (e ? " - " + fmt(e) : ""));
 
-            // 1. Outlook Fix: Use the "Classic" OWA link instead of the "Deeplink"
-            // The OWA link survives the iOS login redirect loop much better
+            // 1. Outlook
             const sISO = formatISO(s);
             const eISO = e ? formatISO(e) : sISO;
-            
             const outParams = new URLSearchParams({
                 path: '/calendar/action/compose',
                 rru: 'addevent',
@@ -92,10 +88,9 @@
                 location: l
             });
             if (isAllDay) outParams.append('allday', 'true');
-            // Using outlook.office.com/owa covers both Business and Personal usually
             document.getElementById('outLink').href = "https://outlook.office.com/owa/?" + outParams.toString();
 
-            // 2. Google (Existing Logic was mostly fine, just ensured dates are clean)
+            // 2. Google
             const gooParams = new URLSearchParams({
                 action: 'TEMPLATE',
                 text: title,
@@ -104,28 +99,52 @@
             });
             document.getElementById('gooLink').href = "https://calendar.google.com/calendar/render?" + gooParams.toString();
 
-            // 3. Apple/ICS Fix: Cleaned up structure and UID
-            // Mobile Safari requires strict formatting. We add '00' for seconds.
-            const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + "Z";
-            
-            const icsBody = [
-                'BEGIN:VCALENDAR',
-                'VERSION:2.0',
-                'PRODID:-//My Calendar App//EN',
-                'BEGIN:VEVENT',
-                `UID:${now}-${Math.floor(Math.random() * 10000)}@myapp.com`,
-                `DTSTAMP:${now}`,
-                `SUMMARY:${title}`,
-                `LOCATION:${l}`,
-                isAllDay 
-                    ? `DTSTART;VALUE=DATE:${s.substring(0,8)}\nDTEND;VALUE=DATE:${e.substring(0,8) || s.substring(0,8)}`
-                    : `DTSTART:${s}00\nDTEND:${e ? e + '00' : s + '00'}`,
-                'END:VEVENT',
-                'END:VCALENDAR'
-            ].join('\n');
+            // 3. IOS / Default Calendar Fix
+            document.getElementById('icsLink').addEventListener('click', function(evt) {
+                evt.preventDefault();
+                
+                // A. Detect if we are on iOS
+                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+                
+                // B. Generate ICS content with strict CRLF (\r\n) line endings
+                const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + "Z";
+                const icsLines = [
+                    'BEGIN:VCALENDAR',
+                    'VERSION:2.0',
+                    'PRODID:-//My Calendar App//EN',
+                    'BEGIN:VEVENT',
+                    `UID:${now}-${Math.floor(Math.random() * 10000)}@myapp.com`,
+                    `DTSTAMP:${now}`,
+                    `SUMMARY:${title}`,
+                    `LOCATION:${l}`,
+                    isAllDay 
+                        ? `DTSTART;VALUE=DATE:${s.substring(0,8)}\r\nDTEND;VALUE=DATE:${e.substring(0,8) || s.substring(0,8)}`
+                        : `DTSTART:${s}00\r\nDTEND:${e ? e + '00' : s + '00'}`,
+                    'END:VEVENT',
+                    'END:VCALENDAR'
+                ];
+                
+                // Join with \r\n (CRLF) which is required for iOS parsing
+                const icsBody = icsLines.join('\r\n');
 
-            // Encode specifically for URI component to avoid breaking Safari data parsing
-            document.getElementById('icsLink').href = "data:text/calendar;charset=utf8," + encodeURIComponent(icsBody);
+                // C. Base64 Encode to avoid URL parsing errors
+                const base64Content = btoa(unescape(encodeURIComponent(icsBody)));
+                const dataUrl = 'data:text/calendar;charset=utf-8;base64,' + base64Content;
+
+                if (isIOS) {
+                    // IOS STRATEGY: No 'download' attribute. Open directly.
+                    // This forces Safari to hand off the content to the Calendar app
+                    window.location.href = dataUrl;
+                } else {
+                    // DESKTOP/ANDROID STRATEGY: Force download
+                    const link = document.createElement('a');
+                    link.href = dataUrl;
+                    link.download = 'event.ics';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+            });
             
         } else {
             document.getElementById('dateRow').innerText = "Event Details Missing";
