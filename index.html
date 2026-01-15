@@ -29,17 +29,12 @@
 
 <script>
     (function() {
-        // --- SAFARI CACHE FIX ---
-        // Detects if the page is loaded from Safari's 'Back-Forward' cache and forces a reload
+        // Force refresh for Safari BFCache
         window.onpageshow = function(event) {
-            if (event.persisted) {
-                window.location.reload();
-            }
+            if (event.persisted) window.location.reload();
         };
 
         const p = new URLSearchParams(window.location.search);
-        
-        // Logic for Fallbacks
         const title = p.get('t') || "New Event";
         const s = p.get('s') || ""; 
         const e = p.get('e') || "";
@@ -49,14 +44,23 @@
         document.getElementById('title').innerText = title;
         document.getElementById('locRow').innerText = "📍 " + l;
 
-        // Process Date and Time if start date exists
+        // Helper to force strict RFC 3339 for Outlook iOS compliance
+        function toRFC3339(ts, allDay) {
+            const y = ts.substring(0,4);
+            const m = ts.substring(4,6);
+            const d = ts.substring(6,8);
+            if (allDay || ts.length < 9) return `${y}-${m}-${d}T00:00:00.000Z`;
+            const h = ts.substring(9,11);
+            const min = ts.substring(11,13);
+            return `${y}-${m}-${d}T${h}:${min}:00.000Z`;
+        }
+
         if (s) {
             const yr = s.substring(0,4);
-            const moStr = s.substring(4,6);
-            const dyStr = s.substring(6,8);
-            const moIdx = parseInt(moStr) - 1;
+            const moIdx = parseInt(s.substring(4,6)) - 1;
+            const dy = s.substring(6,8);
+            const dObj = new Date(yr, moIdx, dy);
             
-            const dObj = new Date(yr, moIdx, dyStr);
             document.getElementById('dateRow').innerText = dObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
             
             function fmt(ts) {
@@ -68,38 +72,41 @@
                 return h + ":" + m + " " + a;
             }
 
-            if (isAllDay) {
-                document.getElementById('timeRow').innerText = "All Day Event";
-            } else {
-                const timeText = fmt(s) + (e ? " - " + fmt(e) : "");
-                document.getElementById('timeRow').innerText = timeText;
-            }
+            document.getElementById('timeRow').innerText = isAllDay ? "All Day Event" : (fmt(s) + (e ? " - " + fmt(e) : ""));
 
-            // Calendar Button Logic
-            let outUrl, gooUrl, icsData;
+            // --- THE CRITICAL FIX: RFC 3339 Compliance ---
+            const sRFC = toRFC3339(s, isAllDay);
+            const eRFC = e ? toRFC3339(e, isAllDay) : sRFC;
+
+            // Outlook Link (Production Grade)
+            const outParams = new URLSearchParams({
+                subject: title,
+                location: l,
+                startdt: sRFC,
+                enddt: eRFC
+            });
+            if (isAllDay) outParams.append('allday', 'true');
+            document.getElementById('outLink').href = "https://outlook.office.com/calendar/0/deeplink/compose?" + outParams.toString();
+
+            // Google Link
+            const gooParams = new URLSearchParams({
+                action: 'TEMPLATE',
+                text: title,
+                dates: (isAllDay ? s.substring(0,8) + "/" + (e.substring(0,8) || s.substring(0,8)) : s + "/" + (e || s)),
+                location: l
+            });
+            document.getElementById('gooLink').href = "https://calendar.google.com/calendar/render?" + gooParams.toString();
+
+            // Default/Apple Calendar
+            const icsData = isAllDay ? 
+                `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:${title}\nDTSTART;VALUE=DATE:${s.substring(0,8)}\nDTEND;VALUE=DATE:${e.substring(0,8) || s.substring(0,8)}\nLOCATION:${l}\nX-MICROSOFT-CDO-ALLDAYEVENT:TRUE\nEND:VEVENT\nEND:VCALENDAR` :
+                `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:${title}\nDTSTART:${s}\nDTEND:${e || s}\nLOCATION:${l}\nEND:VEVENT\nEND:VCALENDAR`;
             
-            if (isAllDay) {
-                // All Day Links
-                outUrl = `https://outlook.office.com/calendar/0/deeplink/compose?subject=${encodeURIComponent(title)}&startdt=${yr}-${moStr}-${dyStr}&allday=true&location=${encodeURIComponent(l)}`;
-                gooUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${s.substring(0,8)}/${e.substring(0,8) || s.substring(0,8)}&location=${encodeURIComponent(l)}`;
-                icsData = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:${title}\nDTSTART;VALUE=DATE:${s.substring(0,8)}\nDTEND;VALUE=DATE:${e.substring(0,8) || s.substring(0,8)}\nLOCATION:${l}\nX-MICROSOFT-CDO-ALLDAYEVENT:TRUE\nEND:VEVENT\nEND:VCALENDAR`;
-            } else {
-                // Specific Time Links
-                const sISO = yr + "-" + moStr + "-" + dyStr + "T" + s.substring(9,11) + ":" + s.substring(11,13) + ":00";
-                const eISO = e ? (e.substring(0,4) + "-" + e.substring(4,6) + "-" + e.substring(6,8) + "T" + e.substring(9,11) + ":" + e.substring(11,13) + ":00") : sISO;
-                
-                outUrl = `https://outlook.office.com/calendar/0/deeplink/compose?subject=${encodeURIComponent(title)}&startdt=${sISO}&enddt=${eISO}&location=${encodeURIComponent(l)}`;
-                gooUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${s}/${e || s}&location=${encodeURIComponent(l)}`;
-                icsData = `BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VEVENT\nSUMMARY:${title}\nDTSTART:${s}\nDTEND:${e || s}\nLOCATION:${l}\nEND:VEVENT\nEND:VCALENDAR`;
-            }
-
-            document.getElementById('outLink').href = outUrl;
-            document.getElementById('gooLink').href = gooUrl;
             document.getElementById('icsLink').href = "data:text/calendar;charset=utf8," + encodeURIComponent(icsData);
+            
         } else {
-            // Default placeholder text if no URL parameters are found
-            document.getElementById('dateRow').innerText = "Date of Event";
-            document.getElementById('timeRow').innerText = "Time of Event";
+            document.getElementById('dateRow').innerText = "Event Details Missing";
+            document.getElementById('timeRow').innerText = "Please regenerate the link";
         }
     })();
 </script>
