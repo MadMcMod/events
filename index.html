@@ -29,6 +29,14 @@
 
 <script>
     (function() {
+        // --- SAFARI CACHE FIX ---
+        // Detects if the page is loaded from Safari's 'Back-Forward' cache and forces a reload
+        window.onpageshow = function(event) {
+            if (event.persisted) {
+                window.location.reload();
+            }
+        };
+
         const p = new URLSearchParams(window.location.search);
         
         // Logic for Fallbacks
